@@ -97,6 +97,111 @@ function getCardImage(card) {
   return null;
 }
 
+// ===== Color definitions =====
+const COLORS = [
+  { code: 'W', label: 'White', symbol: 'W', cssClass: 'color-w' },
+  { code: 'U', label: 'Blue',  symbol: 'U', cssClass: 'color-u' },
+  { code: 'B', label: 'Black', symbol: 'B', cssClass: 'color-b' },
+  { code: 'R', label: 'Red',   symbol: 'R', cssClass: 'color-r' },
+  { code: 'G', label: 'Green', symbol: 'G', cssClass: 'color-g' },
+  { code: 'C', label: 'Colorless', symbol: 'C', cssClass: 'color-c' },
+];
+
+// ===== Build the in-set toolbar =====
+function createToolbar(onUpdate) {
+  const state = { sort: 'name', colors: new Set() };
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'set-toolbar';
+
+  // Sort group
+  const sortGroup = document.createElement('div');
+  sortGroup.className = 'toolbar-group';
+  const sortLabel = document.createElement('span');
+  sortLabel.className = 'toolbar-label';
+  sortLabel.textContent = 'Sort:';
+  sortGroup.appendChild(sortLabel);
+
+  const sortBtns = document.createElement('div');
+  sortBtns.className = 'toolbar-btns';
+
+  ['name', 'mana'].forEach((key) => {
+    const btn = document.createElement('button');
+    btn.className = 'toolbar-btn' + (key === 'name' ? ' active' : '');
+    btn.textContent = key === 'name' ? 'Name' : 'Mana Value';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.sort = key;
+      sortBtns.querySelectorAll('.toolbar-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      onUpdate(state);
+    });
+    sortBtns.appendChild(btn);
+  });
+  sortGroup.appendChild(sortBtns);
+  toolbar.appendChild(sortGroup);
+
+  // Color filter group
+  const colorGroup = document.createElement('div');
+  colorGroup.className = 'toolbar-group';
+  const colorLabel = document.createElement('span');
+  colorLabel.className = 'toolbar-label';
+  colorLabel.textContent = 'Colors:';
+  colorGroup.appendChild(colorLabel);
+
+  const colorBtns = document.createElement('div');
+  colorBtns.className = 'toolbar-btns';
+
+  COLORS.forEach(({ code, label, symbol, cssClass }) => {
+    const btn = document.createElement('button');
+    btn.className = `toolbar-btn color-filter ${cssClass}`;
+    btn.textContent = symbol;
+    btn.title = label;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (state.colors.has(code)) {
+        state.colors.delete(code);
+        btn.classList.remove('active');
+      } else {
+        state.colors.add(code);
+        btn.classList.add('active');
+      }
+      onUpdate(state);
+    });
+    colorBtns.appendChild(btn);
+  });
+  colorGroup.appendChild(colorBtns);
+  toolbar.appendChild(colorGroup);
+
+  return { toolbar, state };
+}
+
+// ===== Filter & sort cards =====
+function filterAndSortCards(cards, state) {
+  let filtered = cards;
+
+  if (state.colors.size > 0) {
+    const wantColorless = state.colors.has('C');
+    const selectedColors = [...state.colors].filter((c) => c !== 'C');
+
+    filtered = cards.filter((card) => {
+      const ci = card.color_identity || [];
+      if (wantColorless && ci.length === 0) return true;
+      if (selectedColors.length === 0) return wantColorless && ci.length === 0;
+      return selectedColors.some((c) => ci.includes(c));
+    });
+  }
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (state.sort === 'mana') {
+      return (a.cmc || 0) - (b.cmc || 0) || a.name.localeCompare(b.name);
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  return sorted;
+}
+
 // ===== Build a single set section =====
 function createSetSection(set) {
   const section = document.createElement('div');
@@ -153,6 +258,10 @@ function createSetSection(set) {
 
   // Click handler
   let fetched = false;
+  let allCards = [];
+  let gridContainer = null;
+  let toolbarState = null;
+
   header.addEventListener('click', async () => {
     const isOpen = section.classList.contains('open');
 
@@ -178,15 +287,28 @@ function createSetSection(set) {
         </div>`;
       body.style.maxHeight = body.scrollHeight + 'px';
 
-      const cards = await fetchCommanders(set.code);
-      renderCards(inner, cards);
-      badge.textContent = cards.length;
+      allCards = await fetchCommanders(set.code);
+      inner.innerHTML = '';
+
+      badge.textContent = allCards.length;
       badge.classList.add('visible');
+
+      // Add toolbar
+      const { toolbar, state } = createToolbar((newState) => {
+        toolbarState = newState;
+        renderCardGrid(gridContainer, filterAndSortCards(allCards, newState));
+      });
+      toolbarState = state;
+      inner.appendChild(toolbar);
+
+      // Card grid container
+      gridContainer = document.createElement('div');
+      inner.appendChild(gridContainer);
+      renderCardGrid(gridContainer, filterAndSortCards(allCards, toolbarState));
     }
 
     // Animate open
     body.style.maxHeight = body.scrollHeight + 'px';
-    // After transition, allow natural height for dynamically loaded images
     const onEnd = () => {
       if (section.classList.contains('open')) {
         body.style.maxHeight = 'none';
@@ -199,12 +321,12 @@ function createSetSection(set) {
   return section;
 }
 
-// ===== Render cards inside a set body =====
-function renderCards(container, cards) {
+// ===== Render card grid =====
+function renderCardGrid(container, cards) {
   container.innerHTML = '';
 
   if (!cards || cards.length === 0) {
-    container.innerHTML = '<p class="set-message">No legendary creatures found in this set.</p>';
+    container.innerHTML = '<p class="set-message">No commanders match the current filters.</p>';
     return;
   }
 
@@ -220,7 +342,7 @@ function renderCards(container, cards) {
     link.href = card.scryfall_uri;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    link.title = card.name;
+    link.title = `${card.name} (MV: ${card.cmc || 0})`;
 
     const img = document.createElement('img');
     img.src = imgUrl;
