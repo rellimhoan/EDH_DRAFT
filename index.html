@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MTG Commander Viewer — Browse Commanders by Set</title>
+  <meta name="description" content="Browse Magic: The Gathering commanders organized by set. View card images and link directly to Scryfall." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+
+  <header id="app-header">
+    <div class="header-inner">
+      <div class="header-top">
+        <div>
+          <h1>⚔️ MTG Commander Viewer</h1>
+          <p class="subtitle">Browse legendary commanders by set</p>
+        </div>
+        <button id="sort-toggle" title="Toggle sort order">
+          <span class="sort-icon">↑</span>
+          <span class="sort-label">Oldest First</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="app-main">
+    <div id="loading-spinner" class="spinner-wrap">
+      <div class="spinner"></div>
+      <p>Loading sets from Scryfall…</p>
+    </div>
+    <div id="sets-container"></div>
+  </main>
+
+  <footer id="app-footer">
+    <p>Data provided by <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Not affiliated with Wizards of the Coast.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
